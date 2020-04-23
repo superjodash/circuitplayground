@@ -51,6 +51,7 @@ const int STATE_WAITING = 0;    // waiting for button A to be pressed to start t
 const int STATE_RUNNING = 1;    // the application starts spinning and after SPIN_DURATION seconds moves to STATE_FINISHED
 const int STATE_FINISHED = 2;   // a player is chosen and will keep the display on for FINISHED_DURATION seconds then moves to STATE_RESETTING
 const int STATE_RESETTING = 3;  // resets the application state and moves to STATE_WAITING
+const int PIXEL_BRIGHTNESS = 8; // pixels are bright! set to low brightness
 
 void setup() {
   if(DEBUG) {
@@ -59,7 +60,7 @@ void setup() {
   }
   randomSeed(analogRead(0));  // make sure we get a new seed each time we run
   CircuitPlayground.begin();  // initialize the cpx
-  CircuitPlayground.setBrightness(PIXEL_BRIGHTNESS); // pixels are bright! set to low brightness
+  CircuitPlayground.setBrightness(PIXEL_BRIGHTNESS); 
   CircuitPlayground.speaker.enable(false); // turn off speaker - otherwise it starts automatically
 }
 
@@ -154,7 +155,7 @@ void tryChoosePlayer() {
   // Only try to choose a player if we're done spinning
   if(spinCount > 0) return;
 
-  if(playerCount() > 0) {
+  if(playerCount() == 0) {
     state = STATE_RESETTING;
     return;
   }
