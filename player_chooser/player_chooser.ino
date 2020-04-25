@@ -29,7 +29,7 @@
  */
 
 const bool DEBUG = false; // writes out debug messages to serial monitor if true
-uint8_t pixeln = 0; // the next pixel to light
+uint8_t pixeln = -1; // the next pixel to light, -1 means it hasn't been set yet
 unsigned long lastTime = 0; // keeps track of last millisecond time to calculate deltaTime
 long seconds = 0; // seconds since application has started
 long secondClock = 0; // keeps track of milliseconds and updates seconds if 1000 has passed
@@ -51,6 +51,11 @@ const int STATE_WAITING = 0;    // waiting for button A to be pressed to start t
 const int STATE_RUNNING = 1;    // the application starts spinning and after SPIN_DURATION seconds moves to STATE_FINISHED
 const int STATE_FINISHED = 2;   // a player is chosen and will keep the display on for FINISHED_DURATION seconds then moves to STATE_RESETTING
 const int STATE_RESETTING = 3;  // resets the application state and moves to STATE_WAITING
+
+const int DISPLAY_SPIN = 0;     // Uses a spinner to display the selection
+const int DISPLAY_RANDOM = 1;   // Lights up pixels pseudo-randomly until it finally chooses a player
+int displayType = DISPLAY_SPIN; // The current display type
+
 const int PIXEL_BRIGHTNESS = 8; // pixels are bright! set to low brightness
 
 
@@ -126,6 +131,13 @@ void checkButtons() {
   if (CircuitPlayground.rightButton()) {
     state = STATE_RESETTING;
   }
+  if(state == STATE_WAITING) {
+    if(CircuitPlayground.slideSwitch()) {
+      if(displayType != DISPLAY_SPIN) displayType = DISPLAY_SPIN;
+    } else {
+      if(displayType != DISPLAY_RANDOM) displayType = DISPLAY_RANDOM;
+    }
+  }
 }
 
 /***************************
@@ -163,21 +175,41 @@ const int playerCount() {
   return cselected[0] + cselected[1] + cselected[2] + cselected[3];
 }
 
+int lastPixel = 0;
+
 /***************************
  * Turns the previous pixel off, the current pixel on and increments to the next pixel
  */
-void updatePixels() {
+void displayPixelsSpin() {
+  // Initialize first pixel
+  if(pixeln == -1) pixeln == 0;
+  
   // Turn off previous pixel
-  if(pixeln == 0) {
-    CircuitPlayground.setPixelColor(9, 0, 0, 0);
-  } else {
-    CircuitPlayground.setPixelColor(pixeln-1, 0, 0, 0);
-  }
+  CircuitPlayground.setPixelColor(lastPixel, 0, 0, 0);
+  lastPixel = pixeln;
+  
   // Set current pixel
   CircuitPlayground.setPixelColor(pixeln++, CircuitPlayground.colorWheel(25 * pixeln));
   
   // Makes sure next pixel circles back around
   if (pixeln == 10) pixeln = 0;
+}
+
+void displayPixelsRandom() {
+  // Initialize first pixel
+  if(pixeln == -1) pixeln = random(9);
+
+  // Turn off previous pixel
+  CircuitPlayground.setPixelColor(lastPixel, 0, 0, 0);
+  lastPixel = pixeln;
+  
+  // Set current pixel
+  int colorOffset = 25 * pixeln;
+  CircuitPlayground.setPixelColor(pixeln, CircuitPlayground.colorWheel(colorOffset));
+
+  // Get next pixel
+  while(pixeln == lastPixel) pixeln = random(9);
+  
 }
 
 /***************************
@@ -202,7 +234,7 @@ void tryChoosePlayer() {
     }
     // Get the pixel to display
     int pix = getPlayerPixelIndex(chosenPlayerIndex);
-    int curPixel = (pixeln-1) % 10; // Offset due to updatePixels incrementing pixeln before it exits
+    int curPixel = lastPixel % 10; // Offset due to updatePixels incrementing pixeln before it exits
     
     // Only display the pixel if it's the currently lit one - otherwise let the cycle continue until it gets back here
     if(pix == curPixel) {
@@ -217,7 +249,8 @@ void tryChoosePlayer() {
  */
 void resetState() {
   state = STATE_WAITING;
-  pixeln = 0;
+  pixeln = -1;
+  lastPixel = 0;
   spinCount = SPIN_DURATION;
   finishedCount = FINISHED_DURATION;
   _spinTimer.millisecondsWrite(spinSpeed);
@@ -262,7 +295,11 @@ void loop() {
     case STATE_RUNNING:
       updateEnabledPlayers();
       if(spin) {
-        updatePixels();
+        if(displayType == DISPLAY_SPIN) {
+          displayPixelsSpin();
+        } else {
+          displayPixelsRandom();
+        }
       }
       tryChoosePlayer();
       if(tick) {
