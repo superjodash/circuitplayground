@@ -53,6 +53,57 @@ const int STATE_FINISHED = 2;   // a player is chosen and will keep the display 
 const int STATE_RESETTING = 3;  // resets the application state and moves to STATE_WAITING
 const int PIXEL_BRIGHTNESS = 8; // pixels are bright! set to low brightness
 
+
+
+class Timer {
+    
+  private:
+    unsigned long _milliseconds = 0;
+    unsigned long _lastTime = 0;
+    unsigned long _accum = 0;
+    unsigned long _counter = 0;
+    
+  public:
+    Timer(const int milliseconds) {
+      _milliseconds = milliseconds;
+    }
+  
+    unsigned long loop() {
+      unsigned long t = millis();
+      _accum += t - _lastTime;
+      _lastTime = t;
+      if(_accum >= _milliseconds) {
+        _counter += 1;
+        _accum = 0;
+        return true;
+      }      
+      return false;
+    }
+  
+    unsigned long getEllapsed() {
+      return _counter;
+    }
+    
+    unsigned long msEllapsedRead() {
+      return millis();
+    }
+
+    void millisecondsWrite(const unsigned long milliseconds) {
+      _milliseconds = milliseconds;
+    }
+
+    const unsigned long millisecondsRead() {
+      return _milliseconds;
+    }
+
+};
+
+Timer _secondTimer(1000),   // Second timer
+      _spinTimer(50);       // Spinner timer
+
+/***************************
+ * Initialize application
+ */
 void setup() {
   if(DEBUG) {
     Serial.begin(9600);
@@ -62,25 +113,6 @@ void setup() {
   CircuitPlayground.begin();  // initialize the cpx
   CircuitPlayground.setBrightness(PIXEL_BRIGHTNESS); 
   CircuitPlayground.speaker.enable(false); // turn off speaker - otherwise it starts automatically
-}
-
-/***************************
- * Update the clocks used for timing
- * Returns
- *    true if one second has elapsed during the timer
- */
-const bool updateClocks() {
-  unsigned long t = millis();
-  secondClock += t - lastTime;
-  spinClock += t - lastTime;
-  lastTime = t;
-  
-  if(secondClock >= 1000) {
-    seconds += 1;
-    secondClock = 0;
-    return true;
-  }
-  return false;
 }
 
 
@@ -188,6 +220,7 @@ void resetState() {
   pixeln = 0;
   spinCount = SPIN_DURATION;
   finishedCount = FINISHED_DURATION;
+  _spinTimer.millisecondsWrite(spinSpeed);
   chosenPlayerIndex = -1;
   CircuitPlayground.clearPixels();
 }
@@ -215,7 +248,9 @@ void writeDebug() {
  * Main event loop using state machine
  */
 void loop() {
-  bool tick = updateClocks();
+  bool tick = _secondTimer.loop();
+  bool spin = _spinTimer.loop();
+  
   checkButtons();
   
   if(DEBUG && tick) writeDebug();
@@ -226,12 +261,14 @@ void loop() {
       break;
     case STATE_RUNNING:
       updateEnabledPlayers();
-      if(spinClock >= spinSpeed) {
+      if(spin) {
         updatePixels();
-        spinClock = 0;
       }
       tryChoosePlayer();
-      if(tick) spinCount--;
+      if(tick) {
+        spinCount--;
+        _spinTimer.millisecondsWrite(_spinTimer.millisecondsRead() + 20);
+      }
       break;
     case STATE_FINISHED:
       // keep pixel on so player can see last result until reset button is pressed or 
